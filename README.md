@@ -1,36 +1,47 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LOCKRZ website
 
-## Getting Started
+Public website for LOCKRZ (Yellowdrop Parcel Company Limited). The first release targets **Lusaka only**: it explains the service, shows flat prices, tracks parcels, and collects launch-list sign-ups.
 
-First, run the development server:
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local   # then fill in the values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000. The site works without Supabase configured: it shows default prices, and tracking and sign-ups tell visitors those features aren't open yet.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Database (Supabase, shared with the mobile app)
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The schema lives in [supabase/migrations](supabase/migrations). Apply it with the Supabase CLI (`supabase db push`) or paste it into the SQL editor.
 
-## Learn More
+| Table | Purpose |
+| --- | --- |
+| `profiles` | One row per app user; `role` is `customer`, `courier`, `agent` or `admin` |
+| `locations` | Lockers, agent shops and hubs. Only `is_active` rows are public |
+| `tariffs` | Flat Lusaka prices by parcel size, in ngwee |
+| `parcels` | Bookings, with the sender, the recipient, and the origin and destination points |
+| `parcel_events` | Status history. Inserting an event updates `parcels.status` |
+| `payments` | One row per payment attempt; the gateway is plugged in later |
+| `waitlist` | Launch-list sign-ups (name, phone, area, interest, source) |
 
-To learn more about Next.js, take a look at the following resources:
+The website uses only the **anon key**. Public access goes through two functions:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `track_parcel(tracking_number)` returns the status history only, never phone numbers or collection codes.
+- `join_waitlist(...)` validates the input and adds or updates a sign-up.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Staff (`admin`/`courier`/`agent` roles) get full access through row level security. That access is for the admin portal and courier app.
 
-## Deploy on Vercel
+## Reaching people in Lusaka
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- **Launch list** (`#join`): collects phone numbers and areas so we know where to open pickup points first.
+- **WhatsApp**: set `NEXT_PUBLIC_WHATSAPP_NUMBER` to show "Chat with us" links. The share buttons work without it.
+- **Link previews**: `app/opengraph-image.tsx` makes shared links look good on WhatsApp and Facebook.
+- **Printable poster**: `/poster` is an A4 poster with a QR code. Sign-ups from it are saved with `source = 'poster'`. To track another flyer or campaign, add `?ref=<name>` to its link.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Useful query: sign-ups per area.
+
+```sql
+select area, interest, count(*) from waitlist group by area, interest order by count(*) desc;
+```
